@@ -31,11 +31,12 @@ export const AUDIO_RETRY_DELAY_MS = 2000;
 /**
  * Playback speed options available in the UI.
  * These are discrete steps chosen for accessibility:
+ * - 0.1x and 0.25x downshift ultrasonic and high-frequency calls for human ear review
  * - 0.5x and 0.75x slow down audio, lowering pitch for high-frequency calls
  * - 1.0x is normal speed
  * - 1.25x and 1.5x speed up for quick review
  */
-export const SPEED_OPTIONS = [0.5, 0.75, 1.0, 1.25, 1.5] as const;
+export const SPEED_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5] as const;
 
 /**
  * Default playback speed (normal speed).
