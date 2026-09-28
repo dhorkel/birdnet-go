@@ -1405,19 +1405,6 @@ func (c *Handler) ProcessAudioByID(ctx echo.Context) error {
 // written the HTTP error response and the caller must return respErr unchanged
 // (respErr is nil once the JSON error body is written successfully).
 func (c *Handler) resolveBatClipFile(ctx echo.Context, noteID string) (absolutePath string, ok bool, respErr error) {
-	// Audible-bats playback only applies to bat detections.
-	modelType, err := c.DS.GetNoteModelType(noteID)
-	if err != nil {
-		if isClipNotFoundErr(err) {
-			return "", false, c.HandleError(ctx, err, "Detection not found", http.StatusNotFound)
-		}
-		return "", false, c.HandleError(ctx, err, "Failed to resolve detection model type", http.StatusInternalServerError)
-	}
-	if modelType != modelTypeBat {
-		return "", false, c.HandleError(ctx, fmt.Errorf("model type %q is not a bat model", modelType),
-			"Audible bats mode is only available for bat detections", http.StatusBadRequest)
-	}
-
 	// Resolve and validate clip path (same pattern as ProcessAudioByID).
 	clipPath, err := c.DS.GetNoteClipPath(noteID)
 	if err != nil {
@@ -1519,13 +1506,10 @@ func (c *Handler) AudibleBatsByID(ctx echo.Context) error {
 		}
 		return c.HandleError(ctx, err, "Failed to probe audio sample rate", http.StatusInternalServerError)
 	}
-	// Sources below the minimum bat capture rate cannot carry ultrasonic content,
-	// so a derived "audible bats" clip would have nothing meaningful to reveal.
-	// Reject before spending CPU on time expansion.
-	if sampleRate < ffmpeg.MinBatSampleRate {
+	if sampleRate <= 0 {
 		return c.HandleError(ctx,
-			fmt.Errorf("sample rate %d below minimum %d", sampleRate, ffmpeg.MinBatSampleRate),
-			fmt.Sprintf("Source audio must be at least %d Hz for audible bats mode", ffmpeg.MinBatSampleRate),
+			fmt.Errorf("invalid sample rate %d", sampleRate),
+			"Invalid audio sample rate",
 			http.StatusUnprocessableEntity,
 		)
 	}

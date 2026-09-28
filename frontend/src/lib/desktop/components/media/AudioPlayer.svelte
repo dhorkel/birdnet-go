@@ -298,8 +298,8 @@
   // The axis range follows the detection's model type.
   const BIRD_NYQUIST_KHZ = 12;
   const BIRD_TICKS_KHZ = [12, 10, 8, 6, 5, 4, 3, 2, 1];
-  const BAT_NYQUIST_KHZ = 128;
-  const BAT_TICKS_KHZ = [120, 100, 80, 60, 40, 20];
+  const BAT_NYQUIST_KHZ = 48;
+  const BAT_TICKS_KHZ = [45, 40, 35, 30, 25, 20, 15, 10, 5];
   const MODEL_TYPE_BAT = 'bat';
   let isBatSpectrogram = $derived(modelType === MODEL_TYPE_BAT);
   let freqNyquistKHz = $derived(isBatSpectrogram ? BAT_NYQUIST_KHZ : BIRD_NYQUIST_KHZ);
@@ -1943,6 +1943,8 @@
       class:invisible={spectrogramLoader.loading || spectrogramLoader.error}
       class:select-none={enableClipExtraction}
       draggable={enableClipExtraction ? 'false' : undefined}
+      style:transform={isBatSpectrogram ? 'scaleY(2.66667)' : undefined}
+      style:transform-origin={isBatSpectrogram ? 'bottom' : undefined}
       style={responsive
         ? ''
         : `width: ${typeof width === 'number' ? width + 'px' : width}; height: ${typeof height === 'number' ? height + 'px' : height};`}
@@ -2037,18 +2039,16 @@
       class:opacity-0={!isMobile}
       class:group-hover:opacity-100={!isMobile}
     >
-      {#if isBatSpectrogram}
-        <AudibleBatsButton
-          active={audibleBats.active}
-          generating={audibleBats.generating}
-          error={audibleBats.error}
-          disabled={!audioContextAvailable}
-          closeSignal={closeAudibleBatsSignal}
-          onEnable={settings => audibleBats.enable(settings)}
-          onDisable={() => audibleBats.disable()}
-          onMenuOpen={() => closeAudioSettingsSignal++}
-        />
-      {/if}
+      <AudibleBatsButton
+        active={audibleBats.active}
+        generating={audibleBats.generating}
+        error={audibleBats.error}
+        disabled={!audioContextAvailable}
+        closeSignal={closeAudibleBatsSignal}
+        onEnable={settings => audibleBats.enable(settings)}
+        onDisable={() => audibleBats.disable()}
+        onMenuOpen={() => closeAudioSettingsSignal++}
+      />
       <AudioSettingsButton
         {gainValue}
         {filterFreq}

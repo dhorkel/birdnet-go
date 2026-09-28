@@ -68,11 +68,9 @@
   let audioPlaybackSpeed = $state(DEFAULT_PLAYBACK_SPEED);
   let audioContextAvailable = $state(true);
 
-  // Audible bats: only offered for bat detections (matches DetectionCard). The
+  // Audible bats: offered across detections with audio clips. The
   // request lifecycle lives in the shared composable; PlayOverlay swaps to the
   // generated `url` while the spectrogram keeps spanning the full original clip.
-  const MODEL_TYPE_BAT = 'bat';
-  const isBatDetection = $derived(detection.modelType === MODEL_TYPE_BAT);
   const audibleBats = useAudibleBats({ getDetectionId: () => detection.id });
 
   // Reset derived playback if this card instance is recycled to a different
@@ -265,19 +263,17 @@
   <!-- Top-Right Controls - OUTSIDE overflow-hidden container -->
   <div class="absolute top-2 right-2 z-50 flex items-center gap-1.5">
     {#if detection.clipName}
-      {#if isBatDetection}
-        <AudibleBatsButton
-          active={audibleBats.active}
-          generating={audibleBats.generating}
-          error={audibleBats.error}
-          disabled={!audioContextAvailable}
-          closeSignal={closeAudibleBatsSignal}
-          onEnable={settings => audibleBats.enable(settings)}
-          onDisable={() => audibleBats.disable()}
-          onMenuOpen={handleAudibleBatsOpen}
-          onMenuClose={handleAudibleBatsClose}
-        />
-      {/if}
+      <AudibleBatsButton
+        active={audibleBats.active}
+        generating={audibleBats.generating}
+        error={audibleBats.error}
+        disabled={!audioContextAvailable}
+        closeSignal={closeAudibleBatsSignal}
+        onEnable={settings => audibleBats.enable(settings)}
+        onDisable={() => audibleBats.disable()}
+        onMenuOpen={handleAudibleBatsOpen}
+        onMenuClose={handleAudibleBatsClose}
+      />
       <AudioSettingsButton
         gainValue={audioGainValue}
         filterFreq={audioFilterFreq}
