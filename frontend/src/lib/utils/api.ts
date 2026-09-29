@@ -157,6 +157,8 @@ export function getCsrfToken(): string | null {
   return token && token.length > 0 ? token : null;
 }
 
+export { refreshCsrfToken };
+
 /**
  * SECURITY: Enhanced default headers with validation
  */

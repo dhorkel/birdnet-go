@@ -160,6 +160,7 @@
       previousEffectiveSrc = src;
       pendingFraction = null;
       audioElement.src = src;
+      audioElement.preload = 'none';
       // Reset playback state for the new detection.
       isPlaying = false;
       currentTime = 0;
@@ -472,11 +473,21 @@
     isLoading = false;
   }
 
+  function handlePointerEnter() {
+    // Lazily promote preload to metadata when user hovers or focuses this card
+    if (audioElement && audioElement.preload === 'none' && !hasEverPlayed) {
+      audioElement.preload = 'metadata';
+    }
+  }
+
   onMount(() => {
     // Create audio element dynamically to avoid iOS Safari issues
-    // where DOM-bound audio elements don't fire canplay events
+    // where DOM-bound audio elements don't fire canplay events.
+    // Use preload="none" so grid cards don't eagerly fetch audio over the network,
+    // which would saturate the browser's 6-connection HTTP/1.1 pool and starve
+    // spectrogram and thumbnail image loads.
     audioElement = new Audio();
-    audioElement.preload = 'metadata';
+    audioElement.preload = 'none';
     audioElement.src = audioUrl;
 
     // Attach all event listeners
@@ -552,6 +563,8 @@
   aria-valuenow={Math.round(progress)}
   aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
   onmousedown={handleMouseDown}
+  onmouseenter={handlePointerEnter}
+  onfocusin={handlePointerEnter}
   onkeydown={e => {
     if (!audioElement || !isFinite(duration) || duration <= 0) return;
     const SMALL_SKIP = 5;

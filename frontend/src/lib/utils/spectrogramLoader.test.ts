@@ -21,6 +21,7 @@ vi.mock('$lib/utils/imageLoadQueue', () => ({
 // Mock CSRF token
 vi.mock('$lib/utils/api', () => ({
   getCsrfToken: () => 'test-csrf-token',
+  refreshCsrfToken: () => Promise.resolve(true),
 }));
 
 // Mock logger
@@ -279,6 +280,35 @@ describe('spectrogramLoader', () => {
 
       expect(loader.state).toBe('error');
       expect(loader.error).toBe(true);
+      loader.destroy();
+    });
+
+    it('re-triggers generation when polling returns not_started', async () => {
+      // Initial status is queued
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ data: { status: 'queued' } }));
+
+      const loader = createSpectrogramLoader({
+        initialPollIntervalMs: 100,
+        maxPollIntervalMs: 200,
+        maxPollAttempts: 3,
+      });
+      loader.start(42);
+      await flushAll();
+      expect(loader.state).toBe('polling');
+
+      // Poll returns not_started (e.g. backend restarted or initial trigger dropped)
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ data: { status: 'not_started' } }));
+      // Re-trigger generation response
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ data: { status: 'queued' } }, 202));
+
+      vi.advanceTimersByTime(100);
+      await flushAll();
+
+      // Verify that POST generate was called
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/generate'),
+        expect.objectContaining({ method: 'POST' })
+      );
       loader.destroy();
     });
 
