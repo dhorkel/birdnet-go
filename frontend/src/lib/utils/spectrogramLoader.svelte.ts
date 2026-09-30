@@ -33,8 +33,8 @@ export type SpectrogramLoadState =
 
 /** Configuration for the spectrogram loader */
 export interface SpectrogramLoaderConfig {
-  size?: string;
-  raw?: boolean;
+  size?: string | (() => string);
+  raw?: boolean | (() => boolean);
   initialPollIntervalMs?: number;
   maxPollIntervalMs?: number;
   maxPollAttempts?: number;
@@ -132,21 +132,29 @@ export function createSpectrogramLoader(userConfig: SpectrogramLoaderConfig = {}
     }, 150);
   }
 
+  function getSize(): string {
+    return typeof config.size === 'function' ? config.size() : config.size;
+  }
+
+  function getRaw(): boolean {
+    return typeof config.raw === 'function' ? config.raw() : config.raw;
+  }
+
   function buildStatusUrl(detectionId: number): string {
     return buildAppUrl(
-      `/api/v2/spectrogram/${detectionId}/status?size=${config.size}&raw=${String(config.raw)}`
+      `/api/v2/spectrogram/${detectionId}/status?size=${getSize()}&raw=${String(getRaw())}`
     );
   }
 
   function buildGenerateUrl(detectionId: number): string {
     return buildAppUrl(
-      `/api/v2/spectrogram/${detectionId}/generate?size=${config.size}&raw=${String(config.raw)}`
+      `/api/v2/spectrogram/${detectionId}/generate?size=${getSize()}&raw=${String(getRaw())}`
     );
   }
 
   function buildImageUrl(detectionId: number): string {
     let url = buildAppUrl(
-      `/api/v2/spectrogram/${detectionId}?size=${config.size}&raw=${String(config.raw)}`
+      `/api/v2/spectrogram/${detectionId}?size=${getSize()}&raw=${String(getRaw())}`
     );
     if (imageRetryCount > 0) {
       url += `&t=${String(Date.now())}`;
