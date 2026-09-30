@@ -125,6 +125,7 @@
           {accessAllowed}
           showSidebarToggle={true}
           showSearch={currentPage === 'dashboard' || currentPage === 'detections'}
+          showAudioLevel={false}
           onSidebarToggle={handleSidebarToggle}
           onSearch={handleSearch}
           onNavigate={handleNavigate}
