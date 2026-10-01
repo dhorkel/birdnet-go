@@ -1393,6 +1393,10 @@ func (c *BirdImageCache) tryFallbackOnGetError(ctx context.Context, err error, s
 	if found {
 		log.Debug("Image found via fallback provider",
 			logger.String("fallback_provider", fallbackImg.SourceProvider))
+		c.dataMap.Store(scientificName, &fallbackImg)
+		dbCopy := fallbackImg
+		dbCopy.SourceProvider = c.providerName
+		c.saveToDB(&dbCopy)
 		return fallbackImg, true
 	}
 	log.Debug("Image not found via fallback providers either")

@@ -621,7 +621,7 @@ func (l *LazyWikiMediaProvider) failInit(err error) {
 	l.nextRetry = time.Now().Add(lazyInitRetryInterval)
 }
 
-// waitForValidConfig waits until configuration is available with a valid version.
+// waitForValidConfig waits until configuration is available.
 func (l *LazyWikiMediaProvider) waitForValidConfig(ctx context.Context, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(configCheckInterval)
@@ -629,7 +629,7 @@ func (l *LazyWikiMediaProvider) waitForValidConfig(ctx context.Context, timeout 
 
 	for {
 		settings := conf.Setting()
-		if settings != nil && settings.Version != "" {
+		if settings != nil {
 			GetLogger().Debug("LazyWikiMediaProvider: Valid configuration detected",
 				logger.String("provider", wikiProviderName),
 				logger.String("version", settings.Version))
