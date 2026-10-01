@@ -1867,16 +1867,26 @@ func (c *Handler) handleUserRequestedMode(ctx echo.Context, noteID, clipPath str
 		_, _, _, relSpectrogramPath := buildSpectrogramPaths(relAudioPath, params.width, params.raw, params.style, params.dynamicRange, freqSuffix)
 
 		// Check if spectrogram already exists and is non-empty
-		if statInfo, statErr := c.SFS.StatRel(relSpectrogramPath); statErr == nil && statInfo.Size() > 0 {
+		servePath := relSpectrogramPath
+		statInfo, statErr := c.SFS.StatRel(servePath)
+		if statErr != nil || statInfo.Size() == 0 {
+			barePath := strings.TrimSuffix(relAudioPath, filepath.Ext(relAudioPath)) + ".png"
+			if bareInfo, bareErr := c.SFS.StatRel(barePath); bareErr == nil && bareInfo.Size() > 0 {
+				servePath = barePath
+				statErr = nil
+			}
+		}
+
+		if statErr == nil {
 			// Spectrogram exists, serve it with cache headers
 			c.LogDebugIfEnabled("Serving existing spectrogram in user-requested mode",
 				logger.String("note_id", noteID),
-				logger.String("spectrogram_path", relSpectrogramPath),
+				logger.String("spectrogram_path", servePath),
 				logger.String("path", ctx.Request().URL.Path),
 				logger.String("ip", ctx.RealIP()))
 
 			ctx.Response().Header().Set("Cache-Control", fmt.Sprintf("%s, max-age=%d, immutable", c.mediaCacheVisibility(), SpectrogramCacheSeconds))
-			err = c.SFS.ServeRelativeFile(ctx, relSpectrogramPath)
+			err = c.SFS.ServeRelativeFile(ctx, servePath)
 			if err != nil {
 				if !ctx.Response().Committed {
 					ctx.Response().Header().Del("Cache-Control")
@@ -2294,6 +2304,20 @@ func (c *Handler) GetSpectrogramStatus(ctx echo.Context) error {
 		})
 	}
 
+	// Fallback for pre-rendered spectrograms created as <basename>.png
+	barePath := strings.TrimSuffix(relAudioPath, filepath.Ext(relAudioPath)) + ".png"
+	if statInfo, err := c.SFS.StatRel(barePath); err == nil && statInfo.Size() > 0 {
+		return ctx.JSON(http.StatusOK, map[string]any{
+			"data": map[string]any{
+				"status":        spectrogramStatusExists,
+				"queuePosition": 0,
+				"message":       "Spectrogram already exists",
+			},
+			"error":   "",
+			"message": "Spectrogram exists on disk",
+		})
+	}
+
 	// Not in queue and doesn't exist on disk
 	return ctx.JSON(http.StatusOK, map[string]any{
 		"data": map[string]any{
@@ -2468,7 +2492,16 @@ func (c *Handler) GenerateSpectrogramByID(ctx echo.Context) error {
 	queueKey := buildSpectrogramQueueKey(noteID, params.width, params.raw, params.style, params.dynamicRange)
 
 	// Check if file already exists on disk and is non-empty
+	existsOnDisk := false
 	if statInfo, err := c.SFS.StatRel(relSpectrogramPath); err == nil && statInfo.Size() > 0 {
+		existsOnDisk = true
+	} else {
+		barePath := strings.TrimSuffix(relAudioPath, filepath.Ext(relAudioPath)) + ".png"
+		if statInfo, err := c.SFS.StatRel(barePath); err == nil && statInfo.Size() > 0 {
+			existsOnDisk = true
+		}
+	}
+	if existsOnDisk {
 		// Already exists, return immediately with generated status
 		queryParams := url.Values{}
 		sizeParam := params.sizeStr
