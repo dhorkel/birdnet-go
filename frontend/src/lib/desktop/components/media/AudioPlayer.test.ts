@@ -586,4 +586,92 @@ describe('AudioPlayer', () => {
       expect(indicator).toBeInTheDocument();
     });
   });
+
+  describe('Spectrogram frequency overlay scaling', () => {
+    it('scales bat overlay to 48 kHz Nyquist with 96 kHz mic rate', () => {
+      const { container } = audioPlayerTest.render({
+        audioUrl: '/audio/test.mp3',
+        detectionId: 'test-bat-96k',
+        showSpectrogram: true,
+        modelType: 'bat',
+        sampleRate: 96000,
+      });
+
+      const labels = Array.from(container.querySelectorAll('.freq-label')).map(
+        el => el.textContent
+      );
+      expect(labels).toEqual(['45k', '40k', '35k', '30k', '25k', '20k', '15k', '10k', '5k']);
+
+      const firstLabel = container.querySelector('.freq-label') as HTMLElement;
+      expect(firstLabel.style.bottom).toBe(`${(45 / 48) * 100}%`);
+    });
+
+    it('scales bat overlay to 96 kHz Nyquist with 192 kHz mic rate', () => {
+      const { container } = audioPlayerTest.render({
+        audioUrl: '/audio/test.mp3',
+        detectionId: 'test-bat-192k',
+        showSpectrogram: true,
+        modelType: 'bat',
+        sampleRate: 192000,
+      });
+
+      const labels = Array.from(container.querySelectorAll('.freq-label')).map(
+        el => el.textContent
+      );
+      expect(labels).toEqual(['90k', '80k', '70k', '60k', '50k', '40k', '30k', '20k', '10k']);
+
+      const firstLabel = container.querySelector('.freq-label') as HTMLElement;
+      expect(firstLabel.style.bottom).toBe(`${(90 / 96) * 100}%`);
+    });
+
+    it('scales bat overlay to 128 kHz Nyquist with 256 kHz mic rate', () => {
+      const { container } = audioPlayerTest.render({
+        audioUrl: '/audio/test.mp3',
+        detectionId: 'test-bat-256k',
+        showSpectrogram: true,
+        modelType: 'bat',
+        sampleRate: 256000,
+      });
+
+      const labels = Array.from(container.querySelectorAll('.freq-label')).map(
+        el => el.textContent
+      );
+      expect(labels).toEqual(['120k', '100k', '80k', '60k', '40k', '20k']);
+
+      const firstLabel = container.querySelector('.freq-label') as HTMLElement;
+      expect(firstLabel.style.bottom).toBe(`${(120 / 128) * 100}%`);
+    });
+
+    it('defaults bat overlay to 48 kHz Nyquist when sample rate is unconfigured', () => {
+      const { container } = audioPlayerTest.render({
+        audioUrl: '/audio/test.mp3',
+        detectionId: 'test-bat-default',
+        showSpectrogram: true,
+        modelType: 'bat',
+      });
+
+      const labels = Array.from(container.querySelectorAll('.freq-label')).map(
+        el => el.textContent
+      );
+      expect(labels).toEqual(['45k', '40k', '35k', '30k', '25k', '20k', '15k', '10k', '5k']);
+    });
+
+    it('renders bird overlay with 12 kHz Nyquist for bird models', () => {
+      const { container } = audioPlayerTest.render({
+        audioUrl: '/audio/test.mp3',
+        detectionId: 'test-bird',
+        showSpectrogram: true,
+        modelType: 'bird',
+        sampleRate: 96000,
+      });
+
+      const labels = Array.from(container.querySelectorAll('.freq-label')).map(
+        el => el.textContent
+      );
+      expect(labels).toEqual(['12k', '10k', '8k', '6k', '5k', '4k', '3k', '2k', '1k']);
+
+      const firstLabel = container.querySelector('.freq-label') as HTMLElement;
+      expect(firstLabel.style.bottom).toBe('100%');
+    });
+  });
 });

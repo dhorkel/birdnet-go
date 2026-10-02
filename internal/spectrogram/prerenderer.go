@@ -273,7 +273,7 @@ func (pr *PreRenderer) Submit(jobDTO interface {
 		ClipPath:         jobDTO.GetClipPath(),
 		NoteID:           jobDTO.GetNoteID(),
 		Timestamp:        jobDTO.GetTimestamp(),
-		FrequencyProfile: ProfileForModelType(modelType),
+		FrequencyProfile: ProfileForModelType(modelType, jobDTO.GetSampleRate()),
 		modelType:        modelType,
 	}
 

@@ -143,6 +143,53 @@ func (a *AudioSettings) FindSourceByID(sourceID string) *AudioSourceConfig {
 	return nil
 }
 
+// GetPrimarySampleRate returns the configured sample rate of the primary audio source
+// (the first configured source), or conf.SampleRate (48000 Hz) if none is configured or set to 0.
+func (a *AudioSettings) GetPrimarySampleRate() int {
+	if a == nil || len(a.Sources) == 0 {
+		return SampleRate
+	}
+	if a.Sources[0].SampleRate > 0 {
+		return a.Sources[0].SampleRate
+	}
+	return SampleRate
+}
+
+// GetSourceSampleRate returns the configured sample rate for the audio source matching
+// sourceID (by Name or Device), falling back to the primary audio source sample rate.
+func (a *AudioSettings) GetSourceSampleRate(sourceID string) int {
+	if a == nil {
+		return SampleRate
+	}
+	if src := a.FindSourceByID(sourceID); src != nil && src.SampleRate > 0 {
+		return src.SampleRate
+	}
+	return a.GetPrimarySampleRate()
+}
+
+// DefaultBatSampleRate returns the configured sample rate for ultrasonic/bat audio capture.
+// If any audio source is explicitly configured with a "bat" model and has a positive sample rate,
+// that rate is returned. Otherwise it falls back to the primary audio source sample rate.
+func (a *AudioSettings) DefaultBatSampleRate() int {
+	if a == nil {
+		return SampleRate
+	}
+	for i := range a.Sources {
+		src := &a.Sources[i]
+		if src.SampleRate > 0 {
+			if src.Model == "bat" {
+				return src.SampleRate
+			}
+			for _, m := range src.Models {
+				if m == "bat" {
+					return src.SampleRate
+				}
+			}
+		}
+	}
+	return a.GetPrimarySampleRate()
+}
+
 // NeedsFfprobeWorkaround returns true if the current FFmpeg version requires
 // using ffprobe to get audio file length for spectrograms (FFmpeg 5.x bug).
 // FFmpeg 7.x and later have this issue fixed.
@@ -1993,6 +2040,45 @@ func (s *Settings) ResolveEQOverride(displayName string) *EqualizerSettings {
 		}
 	}
 	return nil
+}
+
+// GetPrimaryAudioSourceSampleRate returns the configured sample rate of the primary
+// audio source, or 48000 Hz if none is configured or set to 0.
+func (s *Settings) GetPrimaryAudioSourceSampleRate() int {
+	if s == nil {
+		return SampleRate
+	}
+	return s.Realtime.Audio.GetPrimarySampleRate()
+}
+
+// GetAudioSourceSampleRate returns the configured capture sample rate for a given source ID,
+// or falls back to the primary audio source sample rate.
+func (s *Settings) GetAudioSourceSampleRate(sourceID string) int {
+	if s == nil {
+		return SampleRate
+	}
+	return s.Realtime.Audio.GetSourceSampleRate(sourceID)
+}
+
+// DefaultBatSampleRate returns the configured sample rate for ultrasonic/bat audio capture,
+// falling back to the primary audio source sample rate or 48000 Hz if unconfigured.
+func (s *Settings) DefaultBatSampleRate() int {
+	if s == nil {
+		return SampleRate
+	}
+	return s.Realtime.Audio.DefaultBatSampleRate()
+}
+
+// GetPrimaryAudioSourceSampleRate returns the configured sample rate of the primary
+// audio source from global settings, or 48000 Hz if unconfigured.
+func GetPrimaryAudioSourceSampleRate() int {
+	return GetSettings().GetPrimaryAudioSourceSampleRate()
+}
+
+// DefaultBatSampleRate returns the configured sample rate for ultrasonic/bat audio capture
+// from global settings, or 48000 Hz if unconfigured.
+func DefaultBatSampleRate() int {
+	return GetSettings().DefaultBatSampleRate()
 }
 
 // AlertSettings configures the alerting rules engine.

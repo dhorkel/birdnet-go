@@ -41,6 +41,8 @@
   import {
     applyPlaybackRate,
     dbToGain,
+    generateBatTicks,
+    DEFAULT_BAT_NYQUIST_KHZ,
     PLAY_END_DELAY_MS,
     CANPLAY_TIMEOUT_MS,
     PROGRESS_UPDATE_INTERVAL_MS,
@@ -61,7 +63,7 @@
   import { buildAppUrl } from '$lib/utils/urlHelpers';
   import { getCsrfToken } from '$lib/utils/api';
   import { get } from 'svelte/store';
-  import { dashboardSettings } from '$lib/stores/settings';
+  import { dashboardSettings, audioSettings } from '$lib/stores/settings';
 
   const logger = loggers.audio;
 
@@ -114,6 +116,8 @@
     clipLabel?: string;
     /** AI model type (e.g. 'bird', 'bat'); selects the spectrogram frequency axis range */
     modelType?: string;
+    /** Audio capture sample rate in Hz (e.g. 96000, 192000, 256000); overrides mic settings */
+    sampleRate?: number;
   }
 
   let {
@@ -133,6 +137,7 @@
     enableClipExtraction = false,
     clipLabel = '',
     modelType = '',
+    sampleRate,
   }: Props = $props();
 
   // Audio and UI elements
@@ -293,17 +298,31 @@
   const FILTER_HP_MAX_FREQ = 10000;
 
   // Frequency scale overlay constants. Bird spectrograms are resampled to 24kHz
-  // (Nyquist = 12kHz); bat spectrograms keep the native capture rate and are always
-  // labelled on a fixed 0-128 kHz axis regardless of the clip's actual sample rate.
+  // (Nyquist = 12kHz); bat spectrograms scale dynamically to the microphone's
+  // configured Nyquist frequency (sampleRate / 2000), defaulting to 48 kHz if unconfigured.
   // The axis range follows the detection's model type.
   const BIRD_NYQUIST_KHZ = 12;
   const BIRD_TICKS_KHZ = [12, 10, 8, 6, 5, 4, 3, 2, 1];
-  const BAT_NYQUIST_KHZ = 128;
-  const BAT_TICKS_KHZ = [120, 100, 80, 60, 40, 20];
   const MODEL_TYPE_BAT = 'bat';
+
+  const effectiveSampleRate = $derived(
+    sampleRate ??
+      $audioSettings?.sources?.find(
+        (s: { sampleRate?: number; model?: string; models?: string[] }) =>
+          s.sampleRate && (s.model === MODEL_TYPE_BAT || s.models?.includes(MODEL_TYPE_BAT))
+      )?.sampleRate ??
+      $audioSettings?.sources?.[0]?.sampleRate
+  );
+
+  let batNyquistKHz = $derived(
+    effectiveSampleRate && effectiveSampleRate > 0
+      ? Math.round(effectiveSampleRate / 2000)
+      : DEFAULT_BAT_NYQUIST_KHZ
+  );
+
   let isBatSpectrogram = $derived(modelType === MODEL_TYPE_BAT);
-  let freqNyquistKHz = $derived(isBatSpectrogram ? BAT_NYQUIST_KHZ : BIRD_NYQUIST_KHZ);
-  let freqTicksKHz = $derived(isBatSpectrogram ? BAT_TICKS_KHZ : BIRD_TICKS_KHZ);
+  let freqNyquistKHz = $derived(isBatSpectrogram ? batNyquistKHz : BIRD_NYQUIST_KHZ);
+  let freqTicksKHz = $derived(isBatSpectrogram ? generateBatTicks(batNyquistKHz) : BIRD_TICKS_KHZ);
   // PLAY_END_DELAY_MS imported from $lib/utils/audio
   // Spinner delay is now handled by useDelayedLoading utility
 

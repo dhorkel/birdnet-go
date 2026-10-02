@@ -2659,8 +2659,8 @@ func getSpectrogramLogger() logger.Logger {
 }
 
 // resolveDetectionFrequencyProfile resolves a detection's spectrogram frequency
-// profile from its model type, defaulting to the bird profile when the model
-// type cannot be looked up.
+// profile from its model type and configured microphone sample rate, defaulting to
+// the bird profile when the model type cannot be looked up.
 func (c *Handler) resolveDetectionFrequencyProfile(noteID string) spectrogram.FrequencyProfile {
 	modelType, err := c.DS.GetNoteModelType(noteID)
 	if err != nil {
@@ -2668,7 +2668,15 @@ func (c *Handler) resolveDetectionFrequencyProfile(noteID string) spectrogram.Fr
 			logger.String("note_id", noteID),
 			logger.Error(err))
 	}
-	return spectrogram.ProfileForModelType(modelType)
+	if modelType != modelTypeBat {
+		return spectrogram.BirdProfile()
+	}
+
+	sampleRate := conf.SampleRate
+	if c != nil && c.CurrentSettings() != nil {
+		sampleRate = c.CurrentSettings().DefaultBatSampleRate()
+	}
+	return spectrogram.BatProfileWithRate(sampleRate)
 }
 
 // spectrogramProfileSuffix resolves the frequency-profile cache token for a
