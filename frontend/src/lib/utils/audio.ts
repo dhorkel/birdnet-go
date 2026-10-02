@@ -79,3 +79,34 @@ export function applyPlaybackRate(audio: HTMLAudioElement, rate: number): void {
 export function dbToGain(db: number): number {
   return Math.pow(10, db / 20);
 }
+
+// =============================================================================
+// Spectrogram Nyquist & Tick Generation
+// =============================================================================
+
+/** Default bat Nyquist frequency in kHz when unconfigured */
+export const DEFAULT_BAT_NYQUIST_KHZ = 48;
+
+/**
+ * Generate tick mark frequencies in kHz for ultrasonic / bat spectrogram overlays
+ * based on the Nyquist frequency in kHz.
+ *
+ * Examples:
+ * - 48 kHz Nyquist (96k mic): [45, 40, 35, 30, 25, 20, 15, 10, 5]
+ * - 96 kHz Nyquist (192k mic): [90, 80, 70, 60, 50, 40, 30, 20, 10]
+ * - 128 kHz Nyquist (256k mic): [120, 100, 80, 60, 40, 20]
+ */
+export function generateBatTicks(nyquistKHz: number): number[] {
+  let step = 5;
+  if (nyquistKHz > 100) {
+    step = 20;
+  } else if (nyquistKHz > 50) {
+    step = 10;
+  }
+  const ticks: number[] = [];
+  const start = Math.floor((nyquistKHz - 1) / step) * step;
+  for (let freq = start; freq >= step; freq -= step) {
+    ticks.push(freq);
+  }
+  return ticks;
+}

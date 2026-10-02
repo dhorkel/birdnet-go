@@ -1,10 +1,12 @@
 package spectrogram
 
+import "fmt"
+
 // FrequencyProfile controls spectrogram frequency range and resampling per
-// detection. The gate is the detection's model type: bat models are resampled
-// to batResampleHz (Nyquist = 128 kHz) so the fixed 0-128 kHz axis in the UI
-// is always accurate regardless of the original capture rate; everything else
-// gets bird defaults (resample to birdResampleHz).
+// detection. The gate is the detection's model type: bat models scale their
+// Nyquist frequency to match the microphone capture sample rate (e.g. 96 kHz
+// mic -> Nyquist = 48 kHz), eliminating wasted high-frequency space; everything
+// else gets bird defaults (resample to birdResampleHz).
 type FrequencyProfile struct {
 	ResampleRate int    // Target sample rate in Hz; 0 means keep native rate
 	suffix       string // Cache-filename token identifying the profile; "" for the default bird render
@@ -12,22 +14,11 @@ type FrequencyProfile struct {
 
 const (
 	birdResampleHz  = 24000
-	batResampleHz   = 256000 // Nyquist = 128 kHz; matches the fixed 0-128 kHz overlay axis
+	batResampleHz   = 256000 // Nyquist = 128 kHz; legacy default bat capture rate
 	modelTypeBatStr = "bat"  // ai_models.model_type value that selects the bat profile
 
-	// batCacheSuffix is the cache-filename token for bat spectrograms (e.g.
-	// "<clip>_1026px-bat-v2.png"). It is intentionally separate from
-	// modelTypeBatStr (the stored model-type value) and carries a version marker:
-	// bumping it changes the on-disk filename, so a corrected render lands at a new
-	// path instead of colliding with a stale bat image cached by an older generator.
-	// Bumped to "-v2" alongside the FFmpeg-only fallback resample fix (#3689): bat
-	// clips rendered via the Sox-failure fallback before that fix carry a frequency
-	// axis that disagrees with the 0-128 kHz overlay, and would otherwise be served
-	// from cache indefinitely. Only bat files carry a suffix, so this invalidates
-	// just bat spectrograms; bird renders (empty suffix) are untouched. Pre-bump
-	// "-bat.png" files are left on disk (lazily superseded by the new "-bat-v2"
-	// render) and reaped when the detection is deleted (the delete scan matches any
-	// "<base>_<width>px-" prefix), so the only cost is a tiny transient orphan.
+	// batCacheSuffix is the legacy cache-filename token for bat spectrograms
+	// rendered at the fixed 256 kHz rate ("bat-v2").
 	batCacheSuffix = "bat-v2"
 )
 
@@ -38,10 +29,7 @@ func BirdProfile() FrequencyProfile {
 	}
 }
 
-// BatProfile returns the frequency profile for bat detections. The audio is
-// resampled to batResampleHz (256 kHz, Nyquist = 128 kHz) so the spectrogram
-// always spans the full 0-128 kHz range that the UI axis hardcodes,
-// regardless of the original capture rate (192/256/384 kHz are all supported).
+// BatProfile returns the default frequency profile for bat detections (fixed 256 kHz resample).
 func BatProfile() FrequencyProfile {
 	return FrequencyProfile{
 		ResampleRate: batResampleHz,
@@ -49,14 +37,44 @@ func BatProfile() FrequencyProfile {
 	}
 }
 
+// BatProfileWithRate returns a frequency profile for bat detections scaled to the
+// specified capture sample rate. The spectrogram will span from 0 Hz up to Nyquist
+// (rate / 2), and the cache suffix will include the Nyquist frequency in kHz
+// (e.g., "bat-48k" for a 96 kHz mic) so renders with different rates do not collide.
+func BatProfileWithRate(rate int) FrequencyProfile {
+	if rate <= 0 {
+		rate = 48000
+	}
+	nyquistKhz := rate / 2000
+	var suffix string
+	if rate%2000 == 0 {
+		suffix = fmt.Sprintf("bat-%dk", nyquistKhz)
+	} else {
+		suffix = fmt.Sprintf("bat-%.1fk", float64(rate)/2000.0)
+	}
+	return FrequencyProfile{
+		ResampleRate: rate,
+		suffix:       suffix,
+	}
+}
+
 // ProfileForModelType selects the appropriate frequency profile based on the
 // AI model's type string (as stored in ai_models.model_type).
-// Bat models use the bat profile; everything else uses bird defaults.
-func ProfileForModelType(modelType string) FrequencyProfile {
+// Bat models use the bat profile scaled to the optional sampleRate (or default
+// BatProfile if omitted or non-positive); everything else uses bird defaults.
+func ProfileForModelType(modelType string, sampleRate ...int) FrequencyProfile {
 	if modelType == modelTypeBatStr {
+		if len(sampleRate) > 0 && sampleRate[0] > 0 {
+			return BatProfileWithRate(sampleRate[0])
+		}
 		return BatProfile()
 	}
 	return BirdProfile()
+}
+
+// ProfileForModelTypeWithRate selects the frequency profile for a model type with an explicit sample rate.
+func ProfileForModelTypeWithRate(modelType string, sampleRate int) FrequencyProfile {
+	return ProfileForModelType(modelType, sampleRate)
 }
 
 // ProfileSuffix returns a short, stable token identifying the frequency profile

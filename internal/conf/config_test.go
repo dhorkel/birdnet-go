@@ -160,3 +160,92 @@ bat:
 	assert.InDelta(t, 0.75, settings.Bat.Threshold, 1e-9)
 	assert.True(t, settings.Bat.NighttimeOnly)
 }
+
+func TestAudioSettings_SampleRateHelpers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil AudioSettings returns default 48000", func(t *testing.T) {
+		var a *AudioSettings
+		assert.Equal(t, SampleRate, a.GetPrimarySampleRate())
+		assert.Equal(t, SampleRate, a.GetSourceSampleRate("any"))
+		assert.Equal(t, SampleRate, a.DefaultBatSampleRate())
+	})
+
+	t.Run("empty sources returns default 48000", func(t *testing.T) {
+		a := &AudioSettings{Sources: []AudioSourceConfig{}}
+		assert.Equal(t, SampleRate, a.GetPrimarySampleRate())
+		assert.Equal(t, SampleRate, a.GetSourceSampleRate("any"))
+		assert.Equal(t, SampleRate, a.DefaultBatSampleRate())
+	})
+
+	t.Run("source with 0 sample rate returns default 48000", func(t *testing.T) {
+		a := &AudioSettings{
+			Sources: []AudioSourceConfig{
+				{Name: "mic1", SampleRate: 0},
+			},
+		}
+		assert.Equal(t, SampleRate, a.GetPrimarySampleRate())
+		assert.Equal(t, SampleRate, a.GetSourceSampleRate("mic1"))
+		assert.Equal(t, SampleRate, a.DefaultBatSampleRate())
+	})
+
+	t.Run("primary source with configured rate", func(t *testing.T) {
+		a := &AudioSettings{
+			Sources: []AudioSourceConfig{
+				{Name: "mic1", SampleRate: 96000},
+			},
+		}
+		assert.Equal(t, 96000, a.GetPrimarySampleRate())
+		assert.Equal(t, 96000, a.GetSourceSampleRate("mic1"))
+		assert.Equal(t, 96000, a.DefaultBatSampleRate())
+	})
+
+	t.Run("multiple sources with specific bat source", func(t *testing.T) {
+		a := &AudioSettings{
+			Sources: []AudioSourceConfig{
+				{Name: "bird_mic", SampleRate: 48000, Model: "birdnet"},
+				{Name: "bat_mic", SampleRate: 192000, Models: []string{"bat"}},
+			},
+		}
+		assert.Equal(t, 48000, a.GetPrimarySampleRate())
+		assert.Equal(t, 48000, a.GetSourceSampleRate("bird_mic"))
+		assert.Equal(t, 192000, a.GetSourceSampleRate("bat_mic"))
+		assert.Equal(t, 192000, a.DefaultBatSampleRate())
+	})
+
+	t.Run("multiple sources with bat model field", func(t *testing.T) {
+		a := &AudioSettings{
+			Sources: []AudioSourceConfig{
+				{Name: "bird_mic", SampleRate: 48000, Model: "birdnet"},
+				{Name: "bat_mic", SampleRate: 256000, Model: "bat"},
+			},
+		}
+		assert.Equal(t, 256000, a.DefaultBatSampleRate())
+	})
+}
+
+func TestSettings_SampleRateHelpers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil Settings returns default 48000", func(t *testing.T) {
+		var s *Settings
+		assert.Equal(t, SampleRate, s.GetPrimaryAudioSourceSampleRate())
+		assert.Equal(t, SampleRate, s.GetAudioSourceSampleRate("any"))
+		assert.Equal(t, SampleRate, s.DefaultBatSampleRate())
+	})
+
+	t.Run("Settings delegates to Realtime.Audio", func(t *testing.T) {
+		s := &Settings{
+			Realtime: RealtimeSettings{
+				Audio: AudioSettings{
+					Sources: []AudioSourceConfig{
+						{Name: "ultrasonic", SampleRate: 384000, Model: "bat"},
+					},
+				},
+			},
+		}
+		assert.Equal(t, 384000, s.GetPrimaryAudioSourceSampleRate())
+		assert.Equal(t, 384000, s.GetAudioSourceSampleRate("ultrasonic"))
+		assert.Equal(t, 384000, s.DefaultBatSampleRate())
+	})
+}

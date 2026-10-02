@@ -11,6 +11,8 @@
     showSpectrogram?: boolean;
     /** AI model type (e.g. 'bat'); selects the spectrogram frequency axis */
     modelType?: string;
+    /** Audio capture sample rate in Hz (e.g. 96000, 192000, 256000) */
+    sampleRate?: number;
     onClose?: () => void;
   }
 
@@ -21,6 +23,7 @@
     detectionId = undefined,
     showSpectrogram = true,
     modelType = '',
+    sampleRate,
     onClose,
   }: Props = $props();
 
@@ -79,6 +82,7 @@
         spectrogramSize="md"
         className="w-full"
         {modelType}
+        {sampleRate}
       />
     </div>
   </div>
