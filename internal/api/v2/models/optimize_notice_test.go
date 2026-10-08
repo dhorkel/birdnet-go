@@ -463,6 +463,35 @@ func TestSyncOptimizeNotice_Lifecycle(t *testing.T) {
 	assert.Equal(t, 2, created)
 }
 
+
+func TestSyncOptimizeNotice_LowMemoryModeSuppressesNotice(t *testing.T) {
+	profile := aarch64LowRAMONNXProfile()
+	h, notices := newOptimizeTestHandler(t, &profile)
+	s := h.CurrentSettings()
+	s.LowMemory.Mode = "on"
+	apitest.PublishTestSettings(t, s)
+
+	h.syncOptimizeNotice()
+
+	created, deleted := notices.counts()
+	assert.Zero(t, created, "low-memory mode must suppress optimize notices")
+	assert.Zero(t, deleted)
+}
+
+func TestSyncOptimizeNotice_DisableOptimizeNoticesSuppressesNotice(t *testing.T) {
+	profile := aarch64LowRAMONNXProfile()
+	h, notices := newOptimizeTestHandler(t, &profile)
+	s := h.CurrentSettings()
+	s.Models.DisableOptimizeNotices = true
+	apitest.PublishTestSettings(t, s)
+
+	h.syncOptimizeNotice()
+
+	created, deleted := notices.counts()
+	assert.Zero(t, created, "DisableOptimizeNotices setting must suppress optimize notices")
+	assert.Zero(t, deleted)
+}
+
 func TestSyncOptimizeNotice_NoOfferNoNotice(t *testing.T) {
 	profile := tfliteOnlyProfile()
 	h, notices := newOptimizeTestHandler(t, &profile)

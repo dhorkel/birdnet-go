@@ -19,6 +19,7 @@ import (
 
 	"github.com/tphakala/birdnet-go/internal/classifier"
 	"github.com/tphakala/birdnet-go/internal/classifier/recommend"
+	"github.com/tphakala/birdnet-go/internal/conf"
 	"github.com/tphakala/birdnet-go/internal/inference"
 	"github.com/tphakala/birdnet-go/internal/logger"
 	"github.com/tphakala/birdnet-go/internal/notification"
@@ -111,6 +112,10 @@ func optimizeOffersSignature(offers []optimizeOffer) string {
 // API shows unauthenticated callers detection notices only).
 // The caller guarantees c.ModelManager is non-nil (syncOptimizeNotice checks it).
 func (c *Handler) currentOptimizeOffers() []optimizeOffer {
+	s := c.CurrentSettings()
+	if s.LowMemory.GetMode() == conf.LowMemoryModeOn || s.Models.DisableOptimizeNotices {
+		return nil
+	}
 	visible := classifier.VisibleCatalog()
 	installed := make(map[string]string, len(visible))
 	for i := range visible {
@@ -118,7 +123,6 @@ func (c *Handler) currentOptimizeOffers() []optimizeOffer {
 			installed[visible[i].ID] = vid
 		}
 	}
-	s := c.CurrentSettings()
 	ortStatus := inference.CheckORTAvailability(s.BirdNET.ONNXRuntimePath)
 	c.ensureHostProbed()
 	byVariant, recommended, _ := c.rankCatalog(visible, ortStatus)
@@ -195,7 +199,27 @@ func (c *Handler) syncOptimizeNotice() {
 	}
 	c.optimize.mu.Lock()
 	defer c.optimize.mu.Unlock()
-	c.applyOptimizeNotice(svc, c.currentOptimizeOffers())
+	offers := c.currentOptimizeOffers()
+	if len(offers) == 0 {
+		c.purgeExistingOptimizeNotices(svc)
+	}
+	c.applyOptimizeNotice(svc, offers)
+}
+
+func (c *Handler) purgeExistingOptimizeNotices(svc noticeService) {
+	fullSvc, ok := svc.(*notification.Service)
+	if !ok || fullSvc == nil {
+		return
+	}
+	notifs, err := fullSvc.List(&notification.FilterOptions{Component: notification.ComponentClassifier})
+	if err != nil {
+		return
+	}
+	for _, n := range notifs {
+		if n.TitleKey == notification.MsgModelOptimizeTitle {
+			_ = fullSvc.Delete(n.ID)
+		}
+	}
 }
 
 // applyOptimizeNotice reconciles the latched notice with offers. The caller holds
