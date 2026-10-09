@@ -385,8 +385,8 @@ func (c *Handler) RegisterRoutes(g *echo.Group) {
 	// Audio processing / preview (requires authentication)
 	c.Echo.POST("/api/v2/audio/:id/process", c.ProcessAudioByID, c.AuthMiddleware)
 
-	// Audible bats derived playback (requires authentication)
-	c.Echo.POST("/api/v2/audio/:id/audible-bats", c.AudibleBatsByID, c.AuthMiddleware)
+	// Audible bats derived playback (public like audio playback; gated only in Private Mode)
+	c.Echo.POST("/api/v2/audio/:id/audible-bats", c.AudibleBatsByID, c.PrivateModeAuth)
 
 	// Processed spectrogram preview (requires authentication)
 	c.Echo.POST("/api/v2/spectrogram/:id/process", c.ProcessedSpectrogramByID, c.AuthMiddleware)
@@ -1432,7 +1432,7 @@ func (c *Handler) resolveBatClipFile(ctx echo.Context, noteID string) (absoluteP
 // pitched down) into the human hearing range and resampled to 48 kHz, then
 // optionally loudness-normalized (after conversion) and gain-adjusted. The
 // result is returned as WAV for browser playback and cached ephemerally; the
-// original recording and AI pipeline are never touched. Requires authentication.
+// original recording and AI pipeline are never touched. Accessible in public mode; requires authentication when Private Mode is enabled.
 //
 // POST /api/v2/audio/:id/audible-bats
 // Body: {"expansion": 10, "normalize": true, "gain_db": 6.0}
