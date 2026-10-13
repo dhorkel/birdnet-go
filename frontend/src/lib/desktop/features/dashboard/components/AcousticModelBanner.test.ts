@@ -10,14 +10,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, screen } from '@testing-library/svelte';
 import { renderTyped } from '../../../../../test/render-helpers';
 
-const { acousticModelsState, acousticFailingModels, watchAcousticModels, unwatch } = vi.hoisted(
+const { acousticModelsState, acousticFailingModels, subscribeAcousticModels, unwatch } = vi.hoisted(
   () => {
     const unwatch = vi.fn();
     return {
       unwatch,
       acousticModelsState: vi.fn<() => string | null>(() => null),
       acousticFailingModels: vi.fn<() => { id: string; name: string }[]>(() => []),
-      watchAcousticModels: vi.fn(() => unwatch),
+      subscribeAcousticModels: vi.fn(() => unwatch),
     };
   }
 );
@@ -25,7 +25,7 @@ const { acousticModelsState, acousticFailingModels, watchAcousticModels, unwatch
 vi.mock('$lib/stores/acousticModels.svelte', () => ({
   acousticModelsState,
   acousticFailingModels,
-  watchAcousticModels,
+  subscribeAcousticModels,
 }));
 
 vi.mock('$lib/stores/navigation.svelte', () => ({
@@ -109,9 +109,9 @@ describe('AcousticModelBanner', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('dashboard.acousticModels.loadFailedTitle');
   });
 
-  it('watches the store while mounted and releases the watch on unmount', () => {
+  it('subscribes to the store while mounted and releases the subscription on unmount', () => {
     const { unmount } = renderTyped(AcousticModelBanner);
-    expect(watchAcousticModels).toHaveBeenCalledTimes(1);
+    expect(subscribeAcousticModels).toHaveBeenCalledTimes(1);
     expect(unwatch).not.toHaveBeenCalled();
 
     unmount();

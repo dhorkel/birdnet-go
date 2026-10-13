@@ -2,7 +2,7 @@
   AcousticModelBanner - Dashboard banner shown while no acoustic model is
   loaded, or while a loaded model fails every analysis.
 
-  Watches the shared acoustic model store (one topology SSE per dashboard) and
+  Subscribes to the shared acoustic model store and
   renders for the two explicit no-model verdicts and for loaded models that fail
   every analysis:
   - none_installed (N=0): a warning status with a link to the model gallery.
@@ -25,7 +25,7 @@
   import {
     acousticFailingModels,
     acousticModelsState,
-    watchAcousticModels,
+    subscribeAcousticModels,
   } from '$lib/stores/acousticModels.svelte';
   import { isNoAcousticModelState, type NoAcousticModelState } from '$lib/types/models';
 
@@ -35,7 +35,7 @@
 
   let { class: className = '' }: Props = $props();
 
-  $effect(() => watchAcousticModels());
+  $effect(() => subscribeAcousticModels());
 
   let noModelState = $derived.by((): NoAcousticModelState | null => {
     const state = acousticModelsState();
