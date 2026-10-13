@@ -293,6 +293,30 @@
 
   let audioReady = false;
   let preloadedAudio: HTMLAudioElement | null = null;
+  let preloadTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  let idleCallbackId: number | null = null;
+
+  function scheduleNotificationSoundPreload() {
+    if (!soundEnabled || preloadedAudio || audioReady) return;
+    if (preloadTimer || idleCallbackId !== null) return;
+
+    // Defer loading so it does not compete for HTTP/1.1 connections
+    // with critical dashboard rendering and spectrogram loading.
+    if (typeof globalThis.window !== 'undefined' && 'requestIdleCallback' in globalThis.window) {
+      idleCallbackId = globalThis.window.requestIdleCallback(
+        () => {
+          idleCallbackId = null;
+          preloadNotificationSound();
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      preloadTimer = globalThis.setTimeout(() => {
+        preloadTimer = null;
+        preloadNotificationSound();
+      }, 3000);
+    }
+  }
 
   // Preload notification sound
   function preloadNotificationSound() {
@@ -300,10 +324,12 @@
       const audio = new globalThis.Audio(buildAppUrl(NOTIFICATION_SOUND_PATH));
       audio.volume = NOTIFICATION_VOLUME;
       audio.preload = 'auto';
+      preloadedAudio = audio;
 
       audio.addEventListener('canplaythrough', () => {
-        audioReady = true;
-        preloadedAudio = audio;
+        if (preloadedAudio === audio) {
+          audioReady = true;
+        }
       });
 
       audio.addEventListener('error', e => {
@@ -313,8 +339,10 @@
           errorType: e.type,
           target: e.target?.constructor?.name || 'HTMLAudioElement',
         });
-        audioReady = false;
-        preloadedAudio = null;
+        if (preloadedAudio === audio) {
+          audioReady = false;
+          preloadedAudio = null;
+        }
       });
 
       audio.load();
@@ -411,6 +439,16 @@
       globalThis.clearTimeout(animationTimeout);
       animationTimeout = null;
     }
+    if (preloadTimer) {
+      globalThis.clearTimeout(preloadTimer);
+      preloadTimer = null;
+    }
+    if (idleCallbackId !== null) {
+      if (typeof globalThis.window !== 'undefined' && 'cancelIdleCallback' in globalThis.window) {
+        globalThis.window.cancelIdleCallback(idleCallbackId);
+      }
+      idleCallbackId = null;
+    }
     // Clean up audio resources - abort any ongoing download
     if (preloadedAudio) {
       preloadedAudio.src = '';
@@ -425,8 +463,10 @@
       // Load sound preference
       soundEnabled = globalThis.localStorage.getItem(SOUND_ENABLED_KEY) === 'true';
 
-      // Preload notification sound
-      preloadNotificationSound();
+      // Defer preloading notification sound only if sound is enabled
+      if (soundEnabled) {
+        scheduleNotificationSoundPreload();
+      }
 
       // Load notifications first
       loadNotifications().then(() => {

@@ -798,4 +798,85 @@ describe('NotificationBell Component', () => {
       });
     });
   });
+
+  describe('Notification Sound Preloading', () => {
+    it('does not preload notification sound when sound is disabled', async () => {
+      render(NotificationBell);
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalled();
+      });
+
+      expect(globalThis.Audio).not.toHaveBeenCalled();
+    });
+
+    it('defers preloading notification sound when sound is enabled', async () => {
+      vi.useFakeTimers();
+      (globalThis.localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('true');
+
+      render(NotificationBell);
+
+      // Immediately on mount, Audio should not be instantiated yet (deferred)
+      expect(globalThis.Audio).not.toHaveBeenCalled();
+
+      // After idle/defer timer advances
+      vi.advanceTimersByTime(5000);
+
+      expect(globalThis.Audio).toHaveBeenCalledWith(
+        expect.stringContaining('/ui/assets/sounds/notification.mp3')
+      );
+      vi.useRealTimers();
+    });
+
+    it('cancels timer on unmount before preloading triggers', async () => {
+      vi.useFakeTimers();
+      (globalThis.localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('true');
+
+      const { unmount } = render(NotificationBell);
+
+      expect(globalThis.Audio).not.toHaveBeenCalled();
+
+      // Unmount before idle/timer triggers
+      unmount();
+
+      // Advance timers past preload delay
+      vi.advanceTimersByTime(10000);
+
+      // Preloading should have been canceled
+      expect(globalThis.Audio).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it('cancels requestIdleCallback on unmount when supported', async () => {
+      vi.useFakeTimers();
+      (globalThis.localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue('true');
+
+      const originalRequestIdleCallback = globalThis.window.requestIdleCallback;
+      const originalCancelIdleCallback = globalThis.window.cancelIdleCallback;
+
+      const mockRequestIdleCallback = vi.fn().mockReturnValue(123);
+      const mockCancelIdleCallback = vi.fn();
+
+      // @ts-expect-error test mock
+      globalThis.window.requestIdleCallback = mockRequestIdleCallback;
+      // @ts-expect-error test mock
+      globalThis.window.cancelIdleCallback = mockCancelIdleCallback;
+
+      try {
+        const { unmount } = render(NotificationBell);
+
+        expect(mockRequestIdleCallback).toHaveBeenCalledWith(expect.any(Function), {
+          timeout: 5000,
+        });
+
+        unmount();
+
+        expect(mockCancelIdleCallback).toHaveBeenCalledWith(123);
+      } finally {
+        globalThis.window.requestIdleCallback = originalRequestIdleCallback;
+        globalThis.window.cancelIdleCallback = originalCancelIdleCallback;
+        vi.useRealTimers();
+      }
+    });
+  });
 });
