@@ -654,6 +654,7 @@ Performance Optimizations:
 
       eventSource.onopen = () => {
         logger.debug('SSE connection opened');
+        fetchRecentDetections();
       };
 
       eventSource.onmessage = event => {
