@@ -596,4 +596,92 @@ describe('spectrogramLoader', () => {
       loader.destroy();
     });
   });
+
+  describe('fetch timeout handling', () => {
+    it('transitions to error and hides spinner when status check hangs past timeout', async () => {
+      mockFetch.mockImplementation(() => new Promise(() => {}));
+
+      const loader = createSpectrogramLoader({
+        fetchTimeoutMs: 1000,
+        maxFetchRetries: 1,
+      });
+      loader.start(42);
+
+      await vi.advanceTimersByTimeAsync(150);
+      expect(loader.showSpinner).toBe(true);
+
+      // Timeout first check (1000ms)
+      await vi.advanceTimersByTimeAsync(1000);
+      await flushAll();
+
+      // Backoff delay before retry (500ms)
+      await vi.advanceTimersByTimeAsync(500);
+      await flushAll();
+
+      // Timeout second check (1000ms)
+      await vi.advanceTimersByTimeAsync(1000);
+      await flushAll();
+
+      expect(loader.state).toBe('error');
+      expect(loader.error).toBe(true);
+      expect(loader.showSpinner).toBe(false);
+      loader.destroy();
+    });
+
+    it('falls back to polling when trigger generation hangs past timeout', async () => {
+      // First call (checkStatus): not_started -> triggers generation
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ data: { status: 'not_started' } }));
+      // Second call (triggerGeneration POST): hangs
+      mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+
+      const loader = createSpectrogramLoader({
+        fetchTimeoutMs: 1000,
+      });
+      loader.start(42);
+      await flushAll();
+
+      expect(loader.state).toBe('triggering');
+
+      // Timeout trigger generation (1000ms)
+      await vi.advanceTimersByTimeAsync(1000);
+      await flushAll();
+
+      expect(loader.state).toBe('polling');
+      loader.destroy();
+    });
+
+    it('transitions to error when polling fetches hang and exhaust poll attempts', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ data: { status: 'generating' } }));
+
+      const loader = createSpectrogramLoader({
+        fetchTimeoutMs: 500,
+        initialPollIntervalMs: 200,
+        maxPollAttempts: 1,
+      });
+      loader.start(42);
+      await flushAll();
+
+      expect(loader.state).toBe('polling');
+
+      // Now hang polling fetch
+      mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+
+      // Wait for poll interval (200ms)
+      await vi.advanceTimersByTimeAsync(200);
+      await flushAll();
+
+      // Timeout poll fetch (500ms)
+      await vi.advanceTimersByTimeAsync(500);
+      await flushAll();
+
+      // Attempt 2 exceeds maxPollAttempts: 1 (interval backed off to 400ms)
+      await vi.advanceTimersByTimeAsync(400);
+      await flushAll();
+
+      expect(loader.state).toBe('error');
+      expect(loader.error).toBe(true);
+      expect(loader.showSpinner).toBe(false);
+      loader.destroy();
+    });
+  });
 });

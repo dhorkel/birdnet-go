@@ -41,6 +41,7 @@ export interface SpectrogramLoaderConfig {
   maxImageRetries?: number;
   imageRetryDelays?: number[];
   maxFetchRetries?: number;
+  fetchTimeoutMs?: number;
 }
 
 /** Status values returned by the backend */
@@ -56,6 +57,7 @@ const DEFAULT_CONFIG: Required<SpectrogramLoaderConfig> = {
   maxImageRetries: 3,
   imageRetryDelays: [500, 1000, 2000],
   maxFetchRetries: 2,
+  fetchTimeoutMs: 10000,
 };
 
 /**
@@ -158,6 +160,60 @@ export function createSpectrogramLoader(userConfig: SpectrogramLoaderConfig = {}
     return destroyed || currentDetectionId !== forDetectionId;
   }
 
+  async function fetchWithTimeout(
+    url: string,
+    init?: RequestInit,
+    timeoutMs: number = config.fetchTimeoutMs
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const externalSignal = init?.signal;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new DOMException('The operation timed out', 'TimeoutError');
+        controller.abort(err);
+        reject(err);
+      }, timeoutMs);
+    });
+
+    let abortListener: (() => void) | undefined;
+    const abortPromise = new Promise<never>((_, reject) => {
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          controller.abort(externalSignal.reason);
+          reject(
+            (externalSignal.reason as unknown) ??
+              new DOMException('This operation was aborted', 'AbortError')
+          );
+          return;
+        }
+        abortListener = () => {
+          controller.abort(externalSignal.reason);
+          reject(
+            (externalSignal.reason as unknown) ??
+              new DOMException('This operation was aborted', 'AbortError')
+          );
+        };
+        externalSignal.addEventListener('abort', abortListener, { once: true });
+      }
+    });
+
+    try {
+      return await Promise.race([
+        fetch(url, { ...init, signal: controller.signal }),
+        timeoutPromise,
+        abortPromise,
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+      if (externalSignal && abortListener) {
+        externalSignal.removeEventListener('abort', abortListener);
+      }
+    }
+  }
+
   // --- State machine transitions ---
 
   async function checkStatus(detectionId: number): Promise<void> {
@@ -169,7 +225,7 @@ export function createSpectrogramLoader(userConfig: SpectrogramLoaderConfig = {}
     while (fetchRetries <= config.maxFetchRetries) {
       try {
         abortController = new AbortController();
-        const response = await fetch(buildStatusUrl(detectionId), {
+        const response = await fetchWithTimeout(buildStatusUrl(detectionId), {
           signal: abortController.signal,
         });
 
@@ -261,13 +317,14 @@ export function createSpectrogramLoader(userConfig: SpectrogramLoaderConfig = {}
         headers['X-CSRF-Token'] = csrfToken;
       }
 
-      const response = await fetch(buildGenerateUrl(detectionId), {
+      const response = await fetchWithTimeout(buildGenerateUrl(detectionId), {
         method: 'POST',
         headers,
         signal: abortController.signal,
       });
 
       if (isStale(detectionId)) return;
+
 
       if (response.ok || response.status === 202) {
         const json = (await response.json()) as { data: { status: string } };
@@ -330,7 +387,7 @@ export function createSpectrogramLoader(userConfig: SpectrogramLoaderConfig = {}
     abortController = new AbortController();
 
     try {
-      const response = await fetch(buildStatusUrl(detectionId), {
+      const response = await fetchWithTimeout(buildStatusUrl(detectionId), {
         signal: abortController.signal,
       });
 
